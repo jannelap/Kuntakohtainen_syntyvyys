@@ -499,7 +499,8 @@ polygon_join <- polygon1 %>%
 kunnat_skaalattu<-left_join(kunnat_skaalattu, polygon_join, by=join_by(Id == kunta))
 
 kunnat_skaalattu<-kunnat_skaalattu%>%
-  mutate(Maakunta = as.factor(maakunta_name_fi))
+  mutate(Maakunta = as.factor(maakunta_name_fi))%>%
+  select(!geom)
 
 #Lasketaan keskiarvot
 keskiarvot <- kunnat %>%
