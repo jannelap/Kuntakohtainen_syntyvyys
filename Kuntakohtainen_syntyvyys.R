@@ -396,15 +396,16 @@ selittajat<-left_join(selittajat, siviilisaadyt, by = c("Kunta", "Vuosi"))
 selittajat<-left_join(selittajat, asuntokunnat, by = c("Kunta", "Vuosi"))
 selittajat<-left_join(selittajat, naiset_19_49, by = c("Kunta", "Vuosi")) 
 
+#Kasvatetaan selittäjissä vuotta yhdellä, koska tiedot ovat vuoden viimeiseltä päivältä
+selittajat <- selittajat %>%
+  mutate(Vuosi = Vuosi + 1)
+
 #Puuttuvat tiedot
 selittajat[selittajat == "."] <- NA
 
-#Pudotetaan vuosi 2024, koska sitä ei ole kaikissa selittäjissä
+#Pudotetaan vuosi 2025, koska sitä ei ole vasteessa
 selittajat<-selittajat%>%
-  filter(Vuosi<2024)
-
-kunnat<-kunnat%>%
-  filter(Vuosi<2024)
+  filter(Vuosi<2025)
 
 #Skaalataan selittajat ja muutetaan liukuluvuiksi
 selittajat_skaalattu <- selittajat %>%
@@ -417,16 +418,16 @@ selittajat <- selittajat %>%
 kunnat_skaalattu<-left_join(kunnat, selittajat_skaalattu, by = c("Kunta", "Vuosi")) 
 kunnat<-left_join(kunnat, selittajat, by = c("Kunta", "Vuosi"))
 
-
 #Vuosittaiset kokonaishedelmällisyyslukujen keskiarvot
 keskiarvot_hed_vuosittain <- kunnat %>%
   group_by(Vuosi) %>%
   summarize(Hedelmallisyys = mean(Hedelmallisyys))
 
+head(kunnat_skaalattu)
 #-------------------------------------------
 #Puuttuva tieto
 #-------------------------------------------
-sum(is.na(kunnat))
+sum(is.na(kunnat%>%filter(Vuosi>1990)))
 
 #-------------------------------------------
 # Tunnusluvut
@@ -443,7 +444,8 @@ sd(kunnat$Hedelmallisyys)
 
 #Havainnot, joilla poikkeavan suuret arvot
 kunnat %>%
-  filter(Hedelmallisyys > 6)
+  filter(Hedelmallisyys > 6) %>%
+    select(Kunta, Vuosi, Hedelmallisyys)
 
 #-------------------------------------------
 # Visualisointi
@@ -515,7 +517,7 @@ keskiarvot_p[which.max(keskiarvot_p$Hedelmallisyys),c("Hedelmallisyys", "nimi")]
 #Pienin keskiarvo
 keskiarvot_p[which.min(keskiarvot_p$Hedelmallisyys),c("Hedelmallisyys", "nimi")]
 
-#Karttakuva kuntien keskiarvoista vuosilta 1990 - 2023
+#Karttakuva kuntien keskiarvoista vuosilta 1990 - 2024
 kunnat_alue <- ggplot(keskiarvot_p, 
   aes(fill = Hedelmallisyys)) +
   geom_sf() +
@@ -569,7 +571,7 @@ rm(naiset_19_49, selittajat, selittajat_skaalattu, syntyneet, tunnuslukuja, vaki
 #Yhteinen varianssi
 #
 malli_norm<-obs(Hedelmallisyys ~ -1 + varying(~ 1 + lag(Hedelmallisyys, k=1) + Maakunta + Korkea_aste_osuus + Perusaste_osuus + Tyottomat_osuus + Miehet_muut_tyon_ulkopuolella_osuus + Opiskelijat_osuus + Naiset_muut_tyon_ulkopuolella_osuus + Kunnan_ulkopuolella_tyossa + log_Vakiluku + Ei_uskontokuntaa + Keski_ika + Asuinalueella_syntyneet + Naimisissa_osuus + Yhden_henkilon_asuntokunnat_osuus + Neljan_henkilon_asuntokunnat_osuus + Vahintaan_seitseman_henkilon_asuntokunnat_osuus + Naiset_osuus_19_49) + random(~ 1),
-                 family = "gaussian") + splines(df = 10, lb_tau = 0.01)
+                family = "gaussian") + splines(df = 10, lb_tau = 0.01)
 
 fit_malli_norm <- dynamite(
   dformula = malli_norm,
@@ -578,17 +580,17 @@ fit_malli_norm <- dynamite(
 )
 
 #Tallennetaan malli
-#saveRDS(fit_malli_norm, "fit_malli_norm.rds")
-#fit_malli_norm <- readRDS("fit_malli_norm.rds")
+#saveRDS(fit_malli_norm, "fit_malli_norm_lag.rds")
+fit_malli_norm <- readRDS("fit_malli_norm_lag.rds")
 
 #Konvergenssin tarkastelu
-#ess_r(fit_malli_norm)
+ess_r(fit_malli_norm)
 
 #Sovitteen posteriorinäytteet
-#sovitteet_norm <- fitted(fit_malli_norm, thin = 4)
+sovitteet_norm <- fitted(fit_malli_norm, thin = 4)
 
 #Tallennetaan sovitteet
-#saveRDS(sovitteet_norm, "sovitteet_norm.rds")
+saveRDS(sovitteet_norm, "sovitteet_norm.rds")
 #sovitteet_norm <- readRDS("sovitteet_norm.rds")
 
 #R2
@@ -719,8 +721,8 @@ fit_malli_norm_var <- dynamite(
 )
 
 #Tallennetaan malli
-#saveRDS(fit_malli_norm_var, "fit_malli_norm_var.rds")
-#fit_malli_norm_var <- readRDS("fit_malli_norm_var.rds")
+#saveRDS(fit_malli_norm_var, "fit_malli_norm_var_lag.rds")
+fit_malli_norm_var <- readRDS("fit_malli_norm_var_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_norm_var)
@@ -729,7 +731,7 @@ ess_r(fit_malli_norm_var)
 
 #Alphan posteriorikeskiarvot ja 95% posteriorivälit
 alpha <- coef(fit_malli_norm_var, types = "alpha", probs = c(0.025, 0.975))
-print(alpha, n = 34)
+print(alpha, n = 35)
 
 #Posteriorinäytteet maakunnan delta-parametreille
 naytteet_delta_maakunnat <- as_draws(fit_malli_norm_var, parameters = get_parameter_names(fit_malli_norm_var)[3:20])
@@ -741,62 +743,87 @@ delta_maakunnat_tunnusluvut <- posteriori_tunnusluvut(naytteet_delta_maakunnat)
 #Etelä-Karjala
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Etelä-Karjala")) %>%
-  print(n=33)
+  print(n=35)
 
 #Etelä-Pohjanmaa
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Etelä-Pohjanmaa")) %>%
-  print(n=33)
+  print(n=35)
 
 #Etelä-Savo
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Etelä-Savo")) %>%
-  print(n=33)
+  print(n=35)
 
 #Kainuu
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Kainuu")) %>%
-  print(n=33)
+  print(n=35)
 
 #Kanta-Häme
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Kanta-Häme")) %>%
-  print(n=33)
+  print(n=35)
+
+#Keski-Pohjanmaa
+delta_maakunnat_tunnusluvut %>%
+  filter(str_detect(Selittaja, "Keski-Pohjanmaa")) %>%
+  print(n=35)
+
+#Keski-Suomi
+delta_maakunnat_tunnusluvut %>%
+  filter(str_detect(Selittaja, "Keski-Suomi")) %>%
+  print(n=35)
 
 #Kymenlaakso
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Kymenlaakso")) %>%
-  print(n=33)
+  print(n=35)
 
 #Lappi
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Lappi")) %>%
-  print(n=33)
+  print(n=35)
 
 #Pirkanmaa
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Pirkanmaa")) %>%
-  print(n=33)
+  print(n=35)
+
+#Pohjois-Karjala
+delta_maakunnat_tunnusluvut %>%
+  filter(str_detect(Selittaja, "Pohjois-Karjala")) %>%
+  print(n=35)
 
 #Pohjois-Pohjanmaa
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Pohjois-Pohjanmaa")) %>%
-  print(n=33)
+  print(n=35)
+
+#Pohjois-Savo
+delta_maakunnat_tunnusluvut %>%
+  filter(str_detect(Selittaja, "Pohjois-Savo")) %>%
+  print(n=35)
+
+#Päijät-Häme
+delta_maakunnat_tunnusluvut %>%
+  filter(str_detect(Selittaja, "Päijät-Häme")) %>%
+  print(n=35)
 
 #Satakunta
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Satakunta")) %>%
-  print(n=33)
+  print(n=35)
 
 #Uusimaa
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Uusimaa")) %>%
-  print(n=33)
+  print(n=35)
 
 #Varsinais-Suomi
 delta_maakunnat_tunnusluvut %>%
   filter(str_detect(Selittaja, "Varsinais-Suomi")) %>%
-  print(n=33)
+  print(n=35)
 
 #Posteriorinäytteet muille delta-parametreille
 naytteet_delta_muut <- as_draws(fit_malli_norm_var, parameters = get_parameter_names(fit_malli_norm_var)[c(2,21:36)])
@@ -806,87 +833,87 @@ delta_muut_tunnusluvut <- posteriori_tunnusluvut(naytteet_delta_muut)
 #Asuinalueellaan syntyneiden osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Asuinalueella")) %>%
-  print(n=33)
+  print(n=35)
 
 #Uskontokuntaan kuulumattomien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Ei_uskontokuntaa")) %>%
-  print(n=33)
+  print(n=35)
 
 #Edellisen vuoden kokonaishedelmällisyysluku
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "lag1")) %>%
-  print(n=33)
+  print(n=35)
 
 #Keski-ikä
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Keski_ika")) %>%
-  print(n=33)
+  print(n=35)
 
 #Korkeakoulutettujen osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Korkea")) %>%
-  print(n=33)
+  print(n=35)
 
 #Kunnan ulkopuolella työssä käyvien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Kunnan_ulkopuolella")) %>%
-  print(n=33)
+  print(n=35)
 
 #Väkiluvun logaritmi
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Vakiluku")) %>%
-  print(n=33)
+  print(n=35)
 
 #Muiden työn ulkopuolella olevien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Miehet_muut")) %>%
-  print(n=33)
+  print(n=35)
 
 #Naimisissa olevien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Naimisissa")) %>%
-  print(n=33)
+  print(n=35)
 
 #Muiden työn ulkopuolella olevien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Naiset_muut")) %>%
-  print(n=33)
+  print(n=35)
 
 #Naisten osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Naiset_osuus")) %>%
-  print(n=33)
+  print(n=35)
 
 #Neljän henkilön asuntokuntien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Neljan")) %>%
-  print(n=33)
+  print(n=35)
 
 #Opiskelijoiden osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Opiskeli")) %>%
-  print(n=33)
+  print(n=35)
 
 #Vain perusasteen suorittaneiden osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Perusaste")) %>%
-  print(n=33)
+  print(n=35)
 
 #Työttömien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Tyotto")) %>%
-  print(n=33)
+  print(n=35)
 
 #Vähintään seitsemän henkilön asuntokuntien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "seitseman")) %>%
-  print(n=33)
+  print(n=35)
 
 #Yhden henkilön asuntokuntien osuus
 delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Yhden")) %>%
-  print(n=33)
+  print(n=35)
 
 
 #Kuvien otsikot
@@ -911,21 +938,21 @@ p_alpha <- plot(fit_malli_norm_var, type=c("alpha"), n_params = 1000, level = 0.
   ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
   facet_wrap("parameter",labeller = labeller(parameter = facet_alpha))
 p_alpha
-#ggsave("alpha.pdf", p_alpha, width=8, height=8, units="cm")
+ggsave("alpha.pdf", p_alpha, width=8, height=8, units="cm")
 
 #Maakunta deltat
 p_delta_maakunnat <- plot(fit_malli_norm_var, type=c("delta"), n_params = 1000, parameters = names(facet_delta_maakunnat), level = 0.025) + 
   ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
   facet_wrap("parameter",labeller = labeller(parameter = facet_delta_maakunnat), ncol = 4, scales = "fixed") + geom_hline(yintercept = 0, linetype="dashed", color = "red")
 p_delta_maakunnat
-#ggsave("delta_maakunnat.pdf",p_delta_maakunnat, width=16, height=18, units="cm")
+ggsave("delta_maakunnat.pdf",p_delta_maakunnat, width=16, height=18, units="cm")
 
 #Muut deltat
 p_delta_muut <- plot(fit_malli_norm_var, type=c("delta"), n_params = 1000, parameters = names(facet_delta_muut), level = 0.025) + 
   ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
   facet_wrap("parameter",labeller = labeller(parameter = facet_delta_muut), ncol = 3, scales = "free") + geom_hline(yintercept = 0, linetype="dashed", color = "red")
 p_delta_muut
-#ggsave("delta_muut.pdf",p_delta_muut, width=19, height=25, units="cm")
+ggsave("delta_muut.pdf",p_delta_muut, width=19, height=25, units="cm")
 
 #Esitykseen kuva
 #Muut deltat
@@ -939,7 +966,7 @@ p_delta_muut_esitys
 sigma_nu <- coef(fit_malli_norm_var, types = "sigma_nu", probs = c(0.025, 0.975))
 sigma_nu
 
-#Satunnaisvaikutusten visuallisointi
+#Satunnaisvaikutusten visualisointi
 nu <- coef(fit_malli_norm_var, types = "nu", probs = c(0.025, 0.975))
 
 nu$group <- factor(nu$group, levels = nu$group[order(nu$mean)])
@@ -1092,11 +1119,11 @@ ennustukset_norm_var <- predict(fit_malli_norm_var, expand = TRUE, thin = 4)
 sovitteet_norm_var <- fitted(fit_malli_norm_var, thin = 4)
 
 #Tallennetaan ennustukset
-#saveRDS(ennustukset_norm_var, "ennustukset_norm_var.rds")
+saveRDS(ennustukset_norm_var, "ennustukset_norm_var.rds")
 #ennustukset_norm_var <- readRDS("ennustukset_norm_var.rds")
 
 #Tallennetaan sovitteet
-#saveRDS(sovitteet_norm_var, "sovitteet_norm_var.rds")
+saveRDS(sovitteet_norm_var, "sovitteet_norm_var.rds")
 #sovitteet_norm_var <- readRDS("sovitteet_norm_var.rds")
 
 #Ennusteposteriorinäytteiden ero oikeaan arvoon
@@ -1111,7 +1138,7 @@ ennustukset_norm_var_erot <- ennustukset_norm_var %>%
 
 #Keskimääräiset erot per näyte
 ennustukset_norm_var_erot <- ennustukset_norm_var_erot %>%
-  mutate(Hedelmallisyys_ero_ka = Hedelmallisyys_ero_summa/(33*2000))
+  mutate(Hedelmallisyys_ero_ka = Hedelmallisyys_ero_summa/(length(unique(ennustukset_norm_var$Vuosi))*length(unique(ennustukset_norm_var$.draw))))
 
 ennustukset_norm_var_erot <- ennustukset_norm_var_erot %>%
   arrange(Hedelmallisyys_ero_summa)
@@ -1131,7 +1158,7 @@ ennusteet_tarkat <- ggplot(data = ennustukset_norm_var %>% filter(Kunta %in% as.
   facet_wrap(~Kunta, ncol = 3, scales = "free")
 
 ennusteet_tarkat
-#ggsave("ennusteet_tarkat.pdf",ennusteet_tarkat, width=16, height=16, units="cm")
+ggsave("ennusteet_tarkat.pdf",ennusteet_tarkat, width=16, height=16, units="cm")
 
 ennusteet_epatarkat <- ggplot(data = ennustukset_norm_var %>% filter(Kunta %in% as.vector(ennustukset_norm_var_erot$Kunta[299:307])), aes(x = Vuosi)) + 
   stat_summary(aes(y = Hedelmallisyys_new), fun.min = function(y) quantile(y,probs=c(0.025)), fun.max = function(y) quantile(y,probs=c(0.975)), geom="ribbon" , fill = "black", alpha = 0.1) +
@@ -1143,8 +1170,7 @@ ennusteet_epatarkat <- ggplot(data = ennustukset_norm_var %>% filter(Kunta %in% 
   facet_wrap(~Kunta, ncol = 3, scales = "free")
 
 ennusteet_epatarkat
-#ggsave("ennusteet_epatarkat.pdf",ennusteet_epatarkat, width=16, height=16, units="cm")
-
+ggsave("ennusteet_epatarkat.pdf",ennusteet_epatarkat, width=16, height=16, units="cm")
 
 #R2
 norm_var_r2 <-R2(sovitteet_norm_var)
@@ -1259,8 +1285,8 @@ fit_malli_norm_var_its <- dynamite(
 )
 
 #Tallennetaan malli
-#saveRDS(fit_malli_norm_var_its, "fit_malli_norm_var_its.rds")
-#fit_malli_norm_var_its <- readRDS("fit_malli_norm_var_its.rds")
+#saveRDS(fit_malli_norm_var_its, "fit_malli_norm_var_its_lag.rds")
+fit_malli_norm_var_its <- readRDS("fit_malli_norm_var_its_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_norm_var_its)
@@ -1297,8 +1323,8 @@ fit_malli_gamma <- dynamite(
 )
 
 #Tallennetaan malli
-#saveRDS(fit_malli_gamma, "fit_malli_gamma.rds")
-fit_malli_gamma <- readRDS("fit_malli_gamma.rds")
+#saveRDS(fit_malli_gamma, "fit_malli_gamma_lag.rds")
+fit_malli_gamma <- readRDS("fit_malli_gamma_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_gamma)
@@ -1421,8 +1447,8 @@ fit_malli_gamma_var <- dynamite(
 )
 
 #Tallennetaan malli
-#saveRDS(fit_malli_gamma_var, "fit_malli_gamma_var.rds")
-#fit_malli_gamma_var <- readRDS("fit_malli_gamma_var.rds")
+#saveRDS(fit_malli_gamma_var, "fit_malli_gamma_var_lag.rds")
+fit_malli_gamma_var <- readRDS("fit_malli_gamma_var_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_gamma_var)
@@ -1447,7 +1473,8 @@ quantile(gamma_var_r2, probs = c(0.025, 0.975))
 #Yksi-pois-ristiinvalidointi
 #--------------
 
-#Toteutetaan yksi-pois-rinstiinvalidointi
+#Toteutetaan yksi-pois-ristiinvalidointi
+set.seed(189)
 loo_norm<-loo(fit_malli_norm, thin = 4)
 loo_norm_var<-loo(fit_malli_norm_var, thin = 4)
 loo_norm_var_its<-loo(fit_malli_norm_var_its, thin = 4)
