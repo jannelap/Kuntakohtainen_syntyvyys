@@ -1022,7 +1022,8 @@ naytteet_sigma_kpi <- naytteet_sigma%>%
   
 naytteet_sigma_kpi
 
-#Muutetaan dynamiten prepare_eval_env_univariate-funktiota, jotta predict-funktio toimii yksilökohtaisilla variansseilla
+#Muutetaan dynamiten prepare_eval_env_univariate-funktiota, jotta predict-funktio
+#toimii yksilökohtaisilla hajonta- ja muotoparametreilla
 prepare_eval_env_univariate_oma <- function (e, resp, resp_levels, cvars, samples, nu_samples, has_random_effects, 
                                              idx, type, eval_type) 
 {
@@ -1119,8 +1120,8 @@ ennustukset_norm_var <- predict(fit_malli_norm_var, expand = TRUE, thin = 4)
 sovitteet_norm_var <- fitted(fit_malli_norm_var, thin = 4)
 
 #Tallennetaan ennustukset
-saveRDS(ennustukset_norm_var, "ennustukset_norm_var.rds")
-#ennustukset_norm_var <- readRDS("ennustukset_norm_var.rds")
+#saveRDS(ennustukset_norm_var, "ennustukset_norm_var.rds")
+ennustukset_norm_var <- readRDS("ennustukset_norm_var.rds")
 
 #Tallennetaan sovitteet
 saveRDS(sovitteet_norm_var, "sovitteet_norm_var.rds")
@@ -1171,6 +1172,11 @@ ennusteet_epatarkat <- ggplot(data = ennustukset_norm_var %>% filter(Kunta %in% 
 
 ennusteet_epatarkat
 ggsave("ennusteet_epatarkat.pdf",ennusteet_epatarkat, width=16, height=16, units="cm")
+
+#Negatiivisten ennusteiden osuus
+ennustukset_norm_var %>%
+  mutate(Hedelmallisyys_new_nega = ifelse(Hedelmallisyys_new<0, 1, 0)) %>%
+  summarise(Negatiiviset_osuus = mean(Hedelmallisyys_new_nega))
 
 #R2
 norm_var_r2 <-R2(sovitteet_norm_var)
