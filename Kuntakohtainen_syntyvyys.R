@@ -8,7 +8,6 @@ library("dynamite")
 library("bayesplot")
 library("devtools")
 library("posterior")
-library("latex2exp")
 library("stringr")
 library("tibble")
 #
@@ -273,7 +272,7 @@ kuntaliitos_kunnat<-c("Pertunmaa", "Mäntyharju")
 
 pe_ma<-kk%>%
   filter(Kunta %in% kuntaliitos_kunnat)
-pe_ma
+
 pe_ma<-pe_ma%>%
   group_by(Vuosi)%>%
   summarise(Kunta = "Mäntyharju", Korkea_aste = sum(Korkea_aste), Perusaste = sum(Perusaste), Yhteensa = sum(Yhteensa))%>%
@@ -396,7 +395,7 @@ selittajat<-left_join(selittajat, siviilisaadyt, by = c("Kunta", "Vuosi"))
 selittajat<-left_join(selittajat, asuntokunnat, by = c("Kunta", "Vuosi"))
 selittajat<-left_join(selittajat, naiset_19_49, by = c("Kunta", "Vuosi")) 
 
-#Kasvatetaan selittäjissä vuotta yhdellä, koska tiedot ovat vuoden viimeiseltä päivältä
+#Kasvatetaan selittäjissä vuotta yhdellä, koska tiedot ovat vuoden lopulta
 selittajat <- selittajat %>%
   mutate(Vuosi = Vuosi + 1)
 
@@ -423,10 +422,10 @@ keskiarvot_hed_vuosittain <- kunnat %>%
   group_by(Vuosi) %>%
   summarize(Hedelmallisyys = mean(Hedelmallisyys))
 
-head(kunnat_skaalattu)
 #-------------------------------------------
 #Puuttuva tieto
 #-------------------------------------------
+#Tarkastetaan aineisto vain vuosilta 1991-2024, koska 1990 vuodelta on vain vasteen arvot
 sum(is.na(kunnat%>%filter(Vuosi>1990)))
 
 #-------------------------------------------
@@ -517,7 +516,7 @@ keskiarvot_p[which.max(keskiarvot_p$Hedelmallisyys),c("Hedelmallisyys", "nimi")]
 #Pienin keskiarvo
 keskiarvot_p[which.min(keskiarvot_p$Hedelmallisyys),c("Hedelmallisyys", "nimi")]
 
-#Karttakuva kuntien keskiarvoista vuosilta 1990 - 2024
+#Karttakuva kuntien keskiarvoista
 kunnat_alue <- ggplot(keskiarvot_p, 
   aes(fill = Hedelmallisyys)) +
   geom_sf() +
@@ -570,9 +569,11 @@ rm(naiset_19_49, selittajat, selittajat_skaalattu, syntyneet, tunnuslukuja, vaki
 #
 #Yhteinen varianssi
 #
+#Määritellään malli
 malli_norm<-obs(Hedelmallisyys ~ -1 + varying(~ 1 + lag(Hedelmallisyys, k=1) + Maakunta + Korkea_aste_osuus + Perusaste_osuus + Tyottomat_osuus + Miehet_muut_tyon_ulkopuolella_osuus + Opiskelijat_osuus + Naiset_muut_tyon_ulkopuolella_osuus + Kunnan_ulkopuolella_tyossa + log_Vakiluku + Ei_uskontokuntaa + Keski_ika + Asuinalueella_syntyneet + Naimisissa_osuus + Yhden_henkilon_asuntokunnat_osuus + Neljan_henkilon_asuntokunnat_osuus + Vahintaan_seitseman_henkilon_asuntokunnat_osuus + Naiset_osuus_19_49) + random(~ 1),
                 family = "gaussian") + splines(df = 10, lb_tau = 0.01)
 
+#Sovitetaan malli
 fit_malli_norm <- dynamite(
   dformula = malli_norm,
   data = ei_nollia_kunnat_skaalattu, time = "Vuosi", group = "Kunta",
@@ -581,7 +582,7 @@ fit_malli_norm <- dynamite(
 
 #Tallennetaan malli
 #saveRDS(fit_malli_norm, "fit_malli_norm_lag.rds")
-fit_malli_norm <- readRDS("fit_malli_norm_lag.rds")
+#fit_malli_norm <- readRDS("fit_malli_norm_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_norm)
@@ -590,7 +591,7 @@ ess_r(fit_malli_norm)
 sovitteet_norm <- fitted(fit_malli_norm, thin = 4)
 
 #Tallennetaan sovitteet
-saveRDS(sovitteet_norm, "sovitteet_norm.rds")
+#saveRDS(sovitteet_norm, "sovitteet_norm.rds")
 #sovitteet_norm <- readRDS("sovitteet_norm.rds")
 
 #R2
@@ -605,7 +606,7 @@ quantile(norm_r2, probs = c(0.025, 0.975))
 #
 #Kuntakohtainen varianssi, joka mallinnettu regressiomallilla
 #
-#Stan-koodi
+#Stan-koodi mallille
 uusi_stan_koodi_norm<-"functions {
 }
 data {
@@ -711,7 +712,7 @@ model {
 generated quantities {
 }
 "
-
+#Sovitetaan malli
 fit_malli_norm_var <- dynamite(
   dformula = malli_norm,
   data = ei_nollia_kunnat_skaalattu, 
@@ -722,7 +723,7 @@ fit_malli_norm_var <- dynamite(
 
 #Tallennetaan malli
 #saveRDS(fit_malli_norm_var, "fit_malli_norm_var_lag.rds")
-fit_malli_norm_var <- readRDS("fit_malli_norm_var_lag.rds")
+#fit_malli_norm_var <- readRDS("fit_malli_norm_var_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_norm_var)
@@ -915,7 +916,7 @@ delta_muut_tunnusluvut %>%
   filter(str_detect(Selittaja, "Yhden")) %>%
   print(n=35)
 
-
+#Kuvat selittäjien posteriorikeskiarvoista ja 95% posterioriväleistä
 #Kuvien otsikot
 facet_alpha <- c("alpha")
 names(facet_alpha) <- c("alpha_Hedelmallisyys")
@@ -932,7 +933,6 @@ facet_delta_muut <- c("Edellisen vuoden \n kokonaishedelmällisyysluku", "Korkea
                       , "Naisten osuus")
 names(facet_delta_muut) <- get_parameter_names(fit_malli_norm_var)[c(2,21:36)]
 
-#Kuvat selittäjien posteriorikeskiarvoista ja 95% posterioriväleistä
 #Alpha
 p_alpha <- plot(fit_malli_norm_var, type=c("alpha"), n_params = 1000, level = 0.025, scales = "fixed") + 
   ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
@@ -954,14 +954,6 @@ p_delta_muut <- plot(fit_malli_norm_var, type=c("delta"), n_params = 1000, param
 p_delta_muut
 ggsave("delta_muut.pdf",p_delta_muut, width=19, height=25, units="cm")
 
-#Esitykseen kuva
-#Muut deltat
-p_delta_muut_esitys <- plot(fit_malli_norm_var, type=c("delta"), n_params = 1000, parameters = names(facet_delta_muut), level = 0.025) + 
-  ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
-  facet_wrap("parameter",labeller = labeller(parameter = facet_delta_muut), ncol = 4, scales = "free") + geom_hline(yintercept = 0, linetype="dashed", color = "red")
-p_delta_muut_esitys
-#ggsave("delta_muut_esitys.pdf",p_delta_muut_esitys, width=25, height=19, units="cm")
-
 #Sigma_nu:n posteriorijakauma
 sigma_nu <- coef(fit_malli_norm_var, types = "sigma_nu", probs = c(0.025, 0.975))
 sigma_nu
@@ -969,15 +961,18 @@ sigma_nu
 #Satunnaisvaikutusten visualisointi
 nu <- coef(fit_malli_norm_var, types = "nu", probs = c(0.025, 0.975))
 
+#Järjestetään posteriorikeskiarvon mukaan
 nu$group <- factor(nu$group, levels = nu$group[order(nu$mean)])
 
+#Valitaan vain kunnat joiden 95% posteriorivälissä ei ole 0
 nu_poikkeamat <- nu %>%
   filter(q2.5 > 0 | q97.5 < 0)
 
+#Järjestetään uudestaan posteriorikeskiarvon mukaan
 nu_poikkeamat <- nu_poikkeamat %>%
   arrange(mean)
 
-nu_poikkeamat
+#Piirretään kuva
 p_nu <- ggplot(data = nu_poikkeamat, aes(x = mean, y = group)) +
   geom_pointrange(aes(x = mean, y = group, xmin = q2.5, xmax = q97.5), fatten = 1) +
   geom_vline(xintercept = 0, linetype="dashed", color = "red") +
@@ -1106,10 +1101,12 @@ prepare_eval_env_univariate_oma <- function (e, resp, resp_levels, cvars, sample
                                          has_lfactor = cvars$has_lfactor)
 }
 
+#Asetetaan dynamite-paketin sisäiset funktiot myös tähän ympäristöön
 onlyif <- get("onlyif", envir = asNamespace("dynamite"))
 is_cumulative <- get("is_cumulative", envir = asNamespace("dynamite"))
 generate_sim_call_univariate <- get("generate_sim_call_univariate", envir = asNamespace("dynamite"))
 
+#Korvataan dynamite-paketin funktio itse kirjoittamalla funktiolla tässä ympäristössä
 assignInNamespace("prepare_eval_env_univariate", prepare_eval_env_univariate_oma, ns = "dynamite")
 
 #Ennustejakauman posteriorinäytteet
@@ -1121,10 +1118,10 @@ sovitteet_norm_var <- fitted(fit_malli_norm_var, thin = 4)
 
 #Tallennetaan ennustukset
 #saveRDS(ennustukset_norm_var, "ennustukset_norm_var.rds")
-ennustukset_norm_var <- readRDS("ennustukset_norm_var.rds")
+#ennustukset_norm_var <- readRDS("ennustukset_norm_var.rds")
 
 #Tallennetaan sovitteet
-saveRDS(sovitteet_norm_var, "sovitteet_norm_var.rds")
+#saveRDS(sovitteet_norm_var, "sovitteet_norm_var.rds")
 #sovitteet_norm_var <- readRDS("sovitteet_norm_var.rds")
 
 #Ennusteposteriorinäytteiden ero oikeaan arvoon
@@ -1159,7 +1156,7 @@ ennusteet_tarkat <- ggplot(data = ennustukset_norm_var %>% filter(Kunta %in% as.
   facet_wrap(~Kunta, ncol = 3, scales = "free")
 
 ennusteet_tarkat
-ggsave("ennusteet_tarkat.pdf",ennusteet_tarkat, width=16, height=16, units="cm")
+#ggsave("ennusteet_tarkat.pdf",ennusteet_tarkat, width=16, height=16, units="cm")
 
 ennusteet_epatarkat <- ggplot(data = ennustukset_norm_var %>% filter(Kunta %in% as.vector(ennustukset_norm_var_erot$Kunta[299:307])), aes(x = Vuosi)) + 
   stat_summary(aes(y = Hedelmallisyys_new), fun.min = function(y) quantile(y,probs=c(0.025)), fun.max = function(y) quantile(y,probs=c(0.975)), geom="ribbon" , fill = "black", alpha = 0.1) +
@@ -1171,7 +1168,7 @@ ennusteet_epatarkat <- ggplot(data = ennustukset_norm_var %>% filter(Kunta %in% 
   facet_wrap(~Kunta, ncol = 3, scales = "free")
 
 ennusteet_epatarkat
-ggsave("ennusteet_epatarkat.pdf",ennusteet_epatarkat, width=16, height=16, units="cm")
+#ggsave("ennusteet_epatarkat.pdf",ennusteet_epatarkat, width=16, height=16, units="cm")
 
 #Negatiivisten ennusteiden osuus
 ennustukset_norm_var %>%
@@ -1190,7 +1187,7 @@ quantile(norm_var_r2, probs = c(0.025, 0.975))
 #
 #Kuntakohtainen varianssi itsenäisenä parametrina
 #
-
+#Stan-koodi mallille
 uusi_stan_koodi_norm_its<-"functions {
 }
 data {
@@ -1282,6 +1279,7 @@ model {
 generated quantities {
 }
 "
+#Sovitetaan malli
 fit_malli_norm_var_its <- dynamite(
   dformula = malli_norm,
   data = ei_nollia_kunnat_skaalattu, 
@@ -1292,7 +1290,7 @@ fit_malli_norm_var_its <- dynamite(
 
 #Tallennetaan malli
 #saveRDS(fit_malli_norm_var_its, "fit_malli_norm_var_its_lag.rds")
-fit_malli_norm_var_its <- readRDS("fit_malli_norm_var_its_lag.rds")
+#fit_malli_norm_var_its <- readRDS("fit_malli_norm_var_its_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_norm_var_its)
@@ -1319,9 +1317,11 @@ quantile(norm_var_r2_its, probs = c(0.025, 0.975))
 #
 #Yhteinen phi
 #
+#Määritetään malli
 malli_gamma<-obs(Hedelmallisyys ~ -1 + varying(~ 1 + lag(Hedelmallisyys, k=1) + Maakunta + Korkea_aste_osuus + Perusaste_osuus + Tyottomat_osuus + Miehet_muut_tyon_ulkopuolella_osuus + Opiskelijat_osuus + Naiset_muut_tyon_ulkopuolella_osuus + Kunnan_ulkopuolella_tyossa + log_Vakiluku + Ei_uskontokuntaa + Keski_ika + Asuinalueella_syntyneet + Naimisissa_osuus + Yhden_henkilon_asuntokunnat_osuus + Neljan_henkilon_asuntokunnat_osuus + Vahintaan_seitseman_henkilon_asuntokunnat_osuus + Naiset_osuus_19_49) + random(~ 1),
                 family = "gamma") + splines(df = 10, lb_tau = 0.01)
 
+#Sovitetaan malli
 fit_malli_gamma <- dynamite(
   dformula = malli_gamma,
   data = ei_nollia_kunnat_skaalattu, time = "Vuosi", group = "Kunta",
@@ -1330,7 +1330,7 @@ fit_malli_gamma <- dynamite(
 
 #Tallennetaan malli
 #saveRDS(fit_malli_gamma, "fit_malli_gamma_lag.rds")
-fit_malli_gamma <- readRDS("fit_malli_gamma_lag.rds")
+#fit_malli_gamma <- readRDS("fit_malli_gamma_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_gamma)
@@ -1355,6 +1355,7 @@ quantile(gamma_r2, probs = c(0.025, 0.975))
 #
 #Kuntakohtainen phi
 #
+#Stan-koodi mallille
 uusi_stan_koodi_gamma <- "
 functions {
 }
@@ -1445,6 +1446,7 @@ model {
 generated quantities {
 }
 "
+#Sovitetaan malli
 fit_malli_gamma_var <- dynamite(
   dformula = malli_gamma,
   custom_stan_model = uusi_stan_koodi_gamma,
@@ -1454,7 +1456,7 @@ fit_malli_gamma_var <- dynamite(
 
 #Tallennetaan malli
 #saveRDS(fit_malli_gamma_var, "fit_malli_gamma_var_lag.rds")
-fit_malli_gamma_var <- readRDS("fit_malli_gamma_var_lag.rds")
+#fit_malli_gamma_var <- readRDS("fit_malli_gamma_var_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_gamma_var)
