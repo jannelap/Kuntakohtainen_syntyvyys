@@ -723,7 +723,7 @@ fit_malli_norm_var <- dynamite(
 
 #Tallennetaan malli
 #saveRDS(fit_malli_norm_var, "fit_malli_norm_var_lag.rds")
-#fit_malli_norm_var <- readRDS("fit_malli_norm_var_lag.rds")
+fit_malli_norm_var <- readRDS("fit_malli_norm_var_lag.rds")
 
 #Konvergenssin tarkastelu
 ess_r(fit_malli_norm_var)
@@ -938,21 +938,21 @@ p_alpha <- plot(fit_malli_norm_var, type=c("alpha"), n_params = 1000, level = 0.
   ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
   facet_wrap("parameter",labeller = labeller(parameter = facet_alpha))
 p_alpha
-ggsave("alpha.pdf", p_alpha, width=8, height=8, units="cm")
+#ggsave("alpha.pdf", p_alpha, width=8, height=8, units="cm")
 
 #Maakunta deltat
 p_delta_maakunnat <- plot(fit_malli_norm_var, type=c("delta"), n_params = 1000, parameters = names(facet_delta_maakunnat), level = 0.025) + 
   ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
   facet_wrap("parameter",labeller = labeller(parameter = facet_delta_maakunnat), ncol = 4, scales = "fixed") + geom_hline(yintercept = 0, linetype="dashed", color = "red")
 p_delta_maakunnat
-ggsave("delta_maakunnat.pdf",p_delta_maakunnat, width=16, height=18, units="cm")
+#ggsave("delta_maakunnat.pdf",p_delta_maakunnat, width=16, height=18, units="cm")
 
 #Muut deltat
 p_delta_muut <- plot(fit_malli_norm_var, type=c("delta"), n_params = 1000, parameters = names(facet_delta_muut), level = 0.025) + 
   ggtitle(element_blank()) + xlab("Vuosi") + ylab("Arvo") + 
   facet_wrap("parameter",labeller = labeller(parameter = facet_delta_muut), ncol = 3, scales = "free") + geom_hline(yintercept = 0, linetype="dashed", color = "red")
 p_delta_muut
-ggsave("delta_muut.pdf",p_delta_muut, width=19, height=25, units="cm")
+#ggsave("delta_muut.pdf",p_delta_muut, width=19, height=25, units="cm")
 
 #Sigma_nu:n posteriorijakauma
 sigma_nu <- coef(fit_malli_norm_var, types = "sigma_nu", probs = c(0.025, 0.975))
